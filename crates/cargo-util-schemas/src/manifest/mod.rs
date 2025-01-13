@@ -1566,7 +1566,7 @@ impl TomlPlatform {
 pub enum FeatureDefinition {
     /// Features that this feature enables.
     Array(Vec<String>),
-    /// Metadata of this feature.
+    /// Unstable feature `feature-metadata`. Metadata of this feature.
     Metadata(FeatureMetadata),
 }
 
@@ -1602,7 +1602,7 @@ impl FeatureDefinition {
     }
 }
 
-/// Metadata of a feature.
+/// Unstable feature `feature-metadata`. Metadata of a feature.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "unstable-schema", derive(schemars::JsonSchema))]
 pub struct FeatureMetadata {
