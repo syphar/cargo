@@ -1563,7 +1563,7 @@ pub fn to_real_manifest(
         }
     }
 
-    validate_feature_definitions(original_toml.features.as_ref(), warnings)?;
+    validate_feature_definitions(&features, original_toml.features.as_ref(), warnings)?;
 
     validate_dependencies(original_toml.dependencies.as_ref(), None, None, warnings)?;
     validate_dependencies(
@@ -2052,6 +2052,7 @@ fn to_virtual_manifest(
 }
 
 fn validate_feature_definitions(
+    cargo_features: &Features,
     features: Option<&BTreeMap<FeatureName, FeatureDefinition>>,
     warnings: &mut Vec<String>,
 ) -> CargoResult<()> {
@@ -2063,6 +2064,7 @@ fn validate_feature_definitions(
         match feature_definition {
             FeatureDefinition::Array(..) => {}
             FeatureDefinition::Metadata(FeatureMetadata { _unused_keys, .. }) => {
+                cargo_features.require(Feature::feature_metadata())?;
                 warnings.extend(
                     _unused_keys
                         .keys()

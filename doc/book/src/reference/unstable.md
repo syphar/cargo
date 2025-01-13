@@ -116,6 +116,7 @@ Each new feature described below should explain how to use it.
     * [Profile `trim-paths` option](#profile-trim-paths-option) --- Control the sanitization of file paths in build outputs.
     * [path bases](#path-bases) --- Named base directories for path dependencies.
     * [`unstable-editions`](#unstable-editions) --- Allows use of editions that are not yet stable.
+    * [feature-metadata](#feature-metadata) --- Table syntax for feature definitions.
 * Information and metadata
     * [unit-graph](#unit-graph) --- Emits JSON for Cargo's internal graph structure.
     * [`cargo rustc --print`](#rustc---print) --- Calls rustc with `--print` to display information from rustc.
@@ -1810,6 +1811,80 @@ If a built-in path base name is also declared in the configuration, then Cargo
 will prefer the value in the configuration. The allows Cargo to add new built-in
 path bases without compatibility issues (as existing uses will shadow the
 built-in name).
+
+## feature-metadata
+
+* Tracking Issue: [#14157](https://github.com/rust-lang/cargo/issues/14157)
+
+This allows to use a table when defining features, with a required `enables` key:
+
+```toml
+[features]
+# same as `foo = []`
+foo = { enables = [] }
+```
+
+This is equivalent to the array-of-strings syntax.
+Support for other keys should be added later.
+
+## lockfile-path
+* Original Issue: [#5707](https://github.com/rust-lang/cargo/issues/5707)
+* Tracking Issue: [#14421](https://github.com/rust-lang/cargo/issues/14421)
+
+This feature allows you to specify the path of lockfile Cargo.lock.
+By default, lockfile is written into `<workspace_root>/Cargo.lock`.
+However, when sources are stored in read-only directory, most of the cargo commands
+would fail, trying to write a lockfile. The `--lockfile-path`
+flag makes it easier to work with readonly sources.
+Note, that currently path must end with `Cargo.lock`. Meaning, if you want to use
+this feature in multiple projects, lockfiles should be stored in different directories.
+Example:
+
+```sh
+cargo +nightly metadata --lockfile-path=$LOCKFILES_ROOT/my-project/Cargo.lock -Z unstable-options
+```
+
+## package-workspace
+* Tracking Issue: [#10948](https://github.com/rust-lang/cargo/issues/10948)
+
+This allows cargo to package (or publish) multiple crates in a workspace, even
+if they have inter-dependencies. For example, consider a workspace containing
+packages `foo` and `dep`, where `foo` depends on `dep`. Then
+
+```sh
+cargo +nightly -Zpackage-workspace package -p foo -p dep
+```
+
+will package both `foo` and `dep`, while
+
+```sh
+cargo +nightly -Zpackage-workspace publish -p foo -p dep
+```
+
+will publish both `foo` and `dep`.
+If `foo` and `dep` are the only crates in the workspace, you can use the `--workspace`
+flag instead of specifying the crates individually:
+
+```sh
+cargo +nightly -Zpackage-workspace package --workspace
+cargo +nightly -Zpackage-workspace publish --workspace
+```
+
+#### Lock-file behavior
+
+When packaging a binary at the same time as one of its dependencies, the binary
+will be packaged with a lock-file pointing at the dependency's registry entry
+*as though the dependency were already published*, even though it has not yet
+been. In this case, `cargo` needs to know the registry that the dependency
+will eventually be published on. `cargo` will attempt to infer this registry
+by examining the [the `publish` field](manifest.md#the-publish-field), falling back
+to `crates.io` if no `publish` field is set. To explicitly set the registry,
+pass a `--registry` or `--index` flag.
+
+```sh
+cargo +nightly -Zpackage-workspace --registry=my-registry package -p foo -p dep
+cargo +nightly -Zpackage-workspace --index=https://example.com package -p foo -p dep
+```
 
 ## native-completions
 * Original Issue: [#6645](https://github.com/rust-lang/cargo/issues/6645)

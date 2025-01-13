@@ -2469,6 +2469,8 @@ fn feature_metadata() {
         .file(
             "Cargo.toml",
             r#"
+                cargo-features = ["feature-metadata"]
+
                 [package]
                 name = "foo"
                 edition = "2015"
@@ -2494,7 +2496,42 @@ fn feature_metadata() {
         )
         .build();
 
-    p.cargo("check --features c").run();
+    p.cargo("check --features c")
+        .masquerade_as_nightly_cargo(&[])
+        .run();
+}
+
+#[cargo_test]
+fn feature_metadata_is_unstable() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+                [package]
+                name = "foo"
+                edition = "2015"
+
+                [features]
+                a = { enables = [] }
+            "#,
+        )
+        .file("src/main.rs", "")
+        .build();
+
+    p.cargo("check --features a")
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
+
+Caused by:
+  feature `feature-metadata` is required
+
+  The package requires the Cargo feature called `feature-metadata`, but that feature is not stabilized in this version of Cargo ([..]).
+  Consider trying a newer version of Cargo (this may require the nightly release).
+  See https://doc.rust-lang.org/nightly/cargo/ for more information about the status of this feature.
+
+"#]])
+        .run();
 }
 
 #[cargo_test]
@@ -2503,6 +2540,8 @@ fn feature_metadata_missing_enables() {
         .file(
             "Cargo.toml",
             r#"
+                cargo-features = ["feature-metadata"]
+
                 [package]
                 name = "foo"
                 edition = "2015"
@@ -2515,12 +2554,13 @@ fn feature_metadata_missing_enables() {
         .build();
 
     p.cargo("check")
+        .masquerade_as_nightly_cargo(&[])
         .with_status(101)
         .with_stderr_data(str![[r#"
 [ERROR] missing field `enables`
- --> Cargo.toml:7:23
+ --> Cargo.toml:[..]:23
   |
-7 |                 foo = {}
+[..] |                 foo = {}
   |                       ^^
   |
 
@@ -2534,6 +2574,7 @@ fn unused_keys_in_feature_metadata() {
         .file(
             "Cargo.toml",
             r#"
+                cargo-features = ["feature-metadata"]
 
                 [package]
                 name = "foo"
@@ -2548,6 +2589,7 @@ fn unused_keys_in_feature_metadata() {
         .build();
 
     p.cargo("check")
+        .masquerade_as_nightly_cargo(&[])
         .with_stderr_data(str![[r#"
 [WARNING] unused manifest key: `features.foo.a`
 [WARNING] unused manifest key: `features.foo.b`
@@ -2564,6 +2606,8 @@ fn normalize_feature_metadata() {
         .file(
             "Cargo.toml",
             r#"
+                cargo-features = ["feature-metadata"]
+
                 [package]
                 name = "foo"
                 edition = "2015"
@@ -2577,9 +2621,13 @@ fn normalize_feature_metadata() {
         .file("src/main.rs", "")
         .build();
 
-    p.cargo("package --no-verify").run();
+    p.cargo("package --no-verify")
+        .masquerade_as_nightly_cargo(&[])
+        .run();
     let f = File::open(&p.root().join("target/package/foo-0.0.0.crate")).unwrap();
     let normalized_manifest = str![[r#"
+...
+
 ...
 
 ...
