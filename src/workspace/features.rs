@@ -585,7 +585,7 @@ features! {
     (unstable, panic_immediate_abort, "", "reference/unstable.html#panic-immediate-abort"),
 
     /// Allow to use a table for defining features.
-    (unstable, feature_metadata, "", "reference/unstable.html#feature_metadata"),
+    (unstable, feature_metadata, "", "reference/unstable.html#feature-metadata"),
 }
 
 /// Status and metadata for a single unstable feature.
