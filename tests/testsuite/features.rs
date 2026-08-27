@@ -2562,7 +2562,6 @@ fn feature_metadata_missing_enables() {
   |
 [..] |                 foo = {}
   |                       ^^
-  |
 
 "#]])
         .run();
@@ -2591,8 +2590,9 @@ fn unused_keys_in_feature_metadata() {
     p.cargo("check")
         .masquerade_as_nightly_cargo(&[])
         .with_stderr_data(str![[r#"
-[WARNING] unused manifest key: `features.foo.a`
-[WARNING] unused manifest key: `features.foo.b`
+[WARNING] Cargo.toml: unused manifest key: `features.foo.a`
+[WARNING] Cargo.toml: unused manifest key: `features.foo.b`
+[WARNING] `foo` (manifest) generated 2 warnings
 [CHECKING] foo v0.0.0 ([ROOT]/foo)
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
 
