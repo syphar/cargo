@@ -3281,7 +3281,14 @@ fn prepare_toml_for_publish(
                 })
                 .cloned()
                 .collect();
-            *feature_deps = FeatureDefinition::Array(feature_array);
+            match feature_deps {
+                // Preserve metadata when publishing; tables with only `enables`
+                // can still use the array syntax for compatibility.
+                FeatureDefinition::Metadata(metadata) if metadata.doc.is_some() => {
+                    metadata.enables = feature_array;
+                }
+                _ => *feature_deps = FeatureDefinition::Array(feature_array),
+            }
         });
     }
 

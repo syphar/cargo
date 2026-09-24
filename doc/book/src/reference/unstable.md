@@ -2387,6 +2387,15 @@ The required `enables` field is equivalent to the array-of-strings syntax.
 
 For other metadata fields, see the subsections below.
 
+For packages opting into `feature-metadata`, `cargo metadata` includes a
+`features_v2` map alongside `features`. Both maps contain the same features,
+including implicit features for optional dependencies. Each `features_v2` entry
+is an object with an `enables` array and any available metadata, such as `doc`.
+The existing `features` field is unchanged.
+
+When packaging, features with metadata such as `doc` retain their table syntax
+in the generated `Cargo.toml`. Features with only `enables` use the array syntax.
+
 ### feature-documentation
 
 * Tracking Issue: [#17445](https://github.com/rust-lang/cargo/issues/17445)

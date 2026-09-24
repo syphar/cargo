@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use crate::util::data_structures::{HashMap, HashSet};
 use anyhow::Context as _;
-use cargo_util_schemas::manifest::{Hints, RustVersion};
+use cargo_util_schemas::manifest::{FeatureDefinition, Hints, RustVersion};
 use futures::FutureExt;
 use futures::TryStreamExt;
 use futures::stream::FuturesUnordered;
@@ -30,6 +30,7 @@ use crate::util::interning::InternedString;
 use crate::util::network::retry::{Retry, RetryResult};
 use crate::util::{self, GlobalContext, Progress, ProgressStyle, internal};
 use crate::workspace::dependency::DepKind;
+use crate::workspace::features::Feature;
 use crate::workspace::{
     CliUnstable, Dependency, Features, Manifest, PackageId, PackageIdSpec, SerializedDependency,
     SourceId, Target,
@@ -78,6 +79,8 @@ pub struct SerializedPackage {
     dependencies: Vec<SerializedDependency>,
     targets: Vec<Target>,
     features: BTreeMap<InternedString, Vec<InternedString>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    features_v2: Option<BTreeMap<InternedString, SerializedFeature>>,
     manifest_path: PathBuf,
     metadata: Option<toml::Value>,
     publish: Option<Vec<String>>,
@@ -96,6 +99,13 @@ pub struct SerializedPackage {
     rust_version: Option<RustVersion>,
     #[serde(skip_serializing_if = "Option::is_none")]
     hints: Option<Hints>,
+}
+
+#[derive(Serialize)]
+struct SerializedFeature {
+    enables: Vec<InternedString>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    doc: Option<String>,
 }
 
 impl Package {
@@ -211,11 +221,39 @@ impl Package {
             .cloned()
             .collect();
         // Convert Vec<FeatureValue> to Vec<InternedString>
-        let crate_features = summary
+        let crate_features: BTreeMap<_, Vec<_>> = summary
             .features()
             .iter()
             .map(|(k, v)| (*k, v.iter().map(|fv| fv.to_string().into()).collect()))
             .collect();
+
+        let features_v2 = self
+            .manifest()
+            .unstable_features()
+            .is_enabled(Feature::feature_metadata())
+            .then(|| {
+                let definitions = self.manifest().normalized_toml().features.as_ref();
+                // Start with the summary so implicit optional-dependency features are
+                // included and both maps describe exactly the same feature graph.
+                crate_features
+                    .iter()
+                    .map(|(name, enables)| {
+                        let doc = definitions
+                            .and_then(|definitions| definitions.get(name.as_str()))
+                            .and_then(|definition| match definition {
+                                FeatureDefinition::Metadata(metadata) => metadata.doc.clone(),
+                                FeatureDefinition::Array(_) => None,
+                            });
+                        (
+                            *name,
+                            SerializedFeature {
+                                enables: enables.clone(),
+                                doc,
+                            },
+                        )
+                    })
+                    .collect()
+            });
 
         SerializedPackage {
             name: package_id.name(),
@@ -232,6 +270,7 @@ impl Package {
                 .collect(),
             targets,
             features: crate_features,
+            features_v2,
             manifest_path: self.manifest_path().to_path_buf(),
             metadata: self.manifest().custom_metadata().cloned(),
             authors: manmeta.authors.clone(),

@@ -192,6 +192,18 @@ The JSON output has the following format:
                 "feat1": [],
                 "feat2": []
             },
+            /* Feature definitions with metadata. Unstable: only included for
+               packages opting into the `feature-metadata` Cargo feature.
+               Contains the same keys as `features`, including implicit features
+               for optional dependencies. Each `enables` array matches the
+               corresponding entry in `features`. The optional `doc` string
+               contains Markdown documentation from the manifest.
+            */
+            "features_v2": {
+                "default": { "enables": ["feat1"] },
+                "feat1": { "enables": [], "doc": "Enables the first feature." },
+                "feat2": { "enables": [] }
+            },
             /* Absolute path to this package's manifest. */
             "manifest_path": "/path/to/my-package/Cargo.toml",
             /* Package metadata.

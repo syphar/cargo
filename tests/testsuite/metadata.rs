@@ -9,6 +9,122 @@ use cargo_test_support::{
 use serde_json::json;
 
 #[cargo_test]
+fn feature_metadata() {
+    let p = project()
+        .file("Cargo.toml", r#"
+            cargo-features = ["feature-metadata"]
+            [package]
+            name = "foo"
+            version = "0.1.0"
+            edition = "2024"
+            [features]
+            default = ["documented"]
+            plain = []
+            empty = { enables = [], doc = "" }
+            table = { enables = ["plain"] }
+            documented = { enables = ["table"], doc = "First paragraph.\n\n**More** documentation." }
+            [dependencies]
+            dep = { path = "dep", optional = true }
+        "#)
+        .file("src/lib.rs", "")
+        .file("dep/Cargo.toml", r#"
+            cargo-features = ["feature-metadata"]
+            [package]
+            name = "dep"
+            version = "0.1.0"
+            edition = "2024"
+            [features]
+            default = { enables = [], doc = "Dependency documentation." }
+        "#)
+        .file("dep/src/lib.rs", "")
+        .build();
+
+    for no_deps in [false, true] {
+        let mut cmd = p.cargo("metadata --format-version 1 --all-features");
+        if no_deps {
+            cmd.arg("--no-deps");
+        }
+        let output = cmd
+            .masquerade_as_nightly_cargo(&["feature-metadata"])
+            .run_json();
+        let packages = output["packages"].as_array().unwrap();
+        let package = packages.iter().find(|pkg| pkg["name"] == "foo").unwrap();
+        assert_eq!(
+            package["features_v2"],
+            json!({
+                "default": { "enables": ["documented"] },
+                "plain": { "enables": [] },
+                "empty": { "enables": [], "doc": "" },
+                "table": { "enables": ["plain"] },
+                "documented": { "enables": ["table"], "doc": "First paragraph.\n\n**More** documentation." },
+                "dep": { "enables": ["dep:dep"] }
+            })
+        );
+        for pkg in packages {
+            let features = pkg["features"].as_object().unwrap();
+            let features_v2 = pkg["features_v2"].as_object().unwrap();
+            assert_eq!(features.len(), features_v2.len());
+            for (name, enables) in features {
+                assert_eq!(*enables, features_v2[name]["enables"]);
+            }
+        }
+        if !no_deps {
+            let dep = packages.iter().find(|pkg| pkg["name"] == "dep").unwrap();
+            assert_eq!(
+                dep["features_v2"]["default"]["doc"],
+                "Dependency documentation."
+            );
+        }
+    }
+}
+
+#[cargo_test]
+fn feature_metadata_dependency_opt_in() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+            [package]
+            name = "foo"
+            version = "0.1.0"
+            edition = "2024"
+            [dependencies]
+            dep = { path = "dep" }
+        "#,
+        )
+        .file("src/lib.rs", "")
+        .file(
+            "dep/Cargo.toml",
+            r#"
+            cargo-features = ["feature-metadata"]
+            [package]
+            name = "dep"
+            version = "0.1.0"
+            edition = "2024"
+            [features]
+            default = { enables = [], doc = "Dependency documentation." }
+        "#,
+        )
+        .file("dep/src/lib.rs", "")
+        .build();
+
+    let output = p
+        .cargo("metadata --format-version 1")
+        .masquerade_as_nightly_cargo(&["feature-metadata"])
+        .run_json();
+    let packages = output["packages"].as_array().unwrap();
+    let root = packages.iter().find(|pkg| pkg["name"] == "foo").unwrap();
+    assert!(root.get("features_v2").is_none());
+    let dep = packages.iter().find(|pkg| pkg["name"] == "dep").unwrap();
+    assert_eq!(
+        dep["features_v2"],
+        json!({
+            "default": { "enables": [], "doc": "Dependency documentation." }
+        })
+    );
+}
+
+#[cargo_test]
 fn cargo_metadata_simple() {
     let p = project()
         .file("src/foo.rs", "")

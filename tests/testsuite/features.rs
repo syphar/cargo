@@ -2743,3 +2743,59 @@ fn feature_has_documentation() {
 "#]])
         .run();
 }
+
+#[cargo_test]
+fn package_feature_documentation() {
+    let p = project()
+        .file("Cargo.toml", r#"
+            cargo-features = ["feature-metadata"]
+            [package]
+            name = "foo"
+            version = "0.1.0"
+            edition = "2024"
+            [features]
+            plain = []
+            table = { enables = ["plain"] }
+            documented = { enables = ["plain", "dev/extra"], doc = "First paragraph.\n\n**More** documentation." }
+            empty = { enables = [], doc = "" }
+            [dev-dependencies]
+            dev = { path = "dev" }
+        "#)
+        .file("src/lib.rs", "")
+        .file("dev/Cargo.toml", r#"
+            [package]
+            name = "dev"
+            version = "0.1.0"
+            edition = "2024"
+            [features]
+            extra = []
+        "#)
+        .file("dev/src/lib.rs", "")
+        .build();
+
+    p.cargo("package --all-features")
+        .masquerade_as_nightly_cargo(&["feature-metadata"])
+        .run();
+    let manifest: toml::Value =
+        toml::from_str(&p.read_file("target/package/foo-0.1.0/Cargo.toml")).unwrap();
+    assert!(manifest["features"]["plain"].is_array());
+    assert!(manifest["features"]["table"].is_array());
+    assert_eq!(
+        manifest["features"]["documented"]["enables"]
+            .as_array()
+            .unwrap(),
+        &[toml::Value::String("plain".into())]
+    );
+    assert_eq!(manifest["features"]["empty"]["doc"].as_str(), Some(""));
+
+    let metadata = p.cargo("metadata --format-version 1 --no-deps --manifest-path target/package/foo-0.1.0/Cargo.toml")
+        .masquerade_as_nightly_cargo(&["feature-metadata"])
+        .run_json();
+    assert_eq!(
+        metadata["packages"][0]["features_v2"]["documented"],
+        serde_json::json!({
+            "enables": ["plain"],
+            "doc": "First paragraph.\n\n**More** documentation."
+        })
+    );
+}
