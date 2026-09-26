@@ -2392,6 +2392,11 @@ For packages opting into `feature-metadata`, `cargo metadata` includes a
 including implicit features for optional dependencies. Each `features_v2` entry
 is an object with an `enables` array and any available metadata, such as `doc`.
 The existing `features` field is unchanged.
+The opt-in is checked separately for each package, whether it is the main crate,
+a workspace member, or a dependency. Enabling `feature-metadata` at the workspace
+root does not enable this field for other packages, and packages that opt in do
+not require the workspace root to opt in. Packages without the opt-in omit
+`features_v2`.
 
 When packaging, features with metadata such as `doc` retain their table syntax
 in the generated `Cargo.toml`. Features with only `enables` use the array syntax.

@@ -125,6 +125,123 @@ fn feature_metadata_dependency_opt_in() {
 }
 
 #[cargo_test]
+fn feature_metadata_workspace_opt_in() {
+    for root_is_package in [false, true] {
+        for root_opts_in in [false, true] {
+            let opt_in = if root_opts_in {
+                "cargo-features = [\"feature-metadata\"]"
+            } else {
+                ""
+            };
+            let root_package = if root_is_package {
+                r#"
+                    [package]
+                    name = "root"
+                    version = "0.1.0"
+                    edition = "2024"
+                    [features]
+                    default = []
+                "#
+            } else {
+                ""
+            };
+            let p = project()
+                .file(
+                    "Cargo.toml",
+                    &format!(
+                        r#"
+                    {opt_in}
+                    [workspace]
+                    members = ["documented", "plain"]
+                    exclude = ["dep"]
+                    resolver = "3"
+                    {root_package}
+                "#
+                    ),
+                )
+                .file("src/lib.rs", "")
+                .file(
+                    "documented/Cargo.toml",
+                    r#"
+                    cargo-features = ["feature-metadata"]
+                    [package]
+                    name = "documented"
+                    version = "0.1.0"
+                    edition = "2024"
+                    [features]
+                    default = { enables = [], doc = "Member documentation." }
+                    [dependencies]
+                    dep = { path = "../dep" }
+                "#,
+                )
+                .file("documented/src/lib.rs", "")
+                .file(
+                    "plain/Cargo.toml",
+                    r#"
+                    [package]
+                    name = "plain"
+                    version = "0.1.0"
+                    edition = "2024"
+                    [features]
+                    default = []
+                "#,
+                )
+                .file("plain/src/lib.rs", "")
+                .file(
+                    "dep/Cargo.toml",
+                    r#"
+                    cargo-features = ["feature-metadata"]
+                    [package]
+                    name = "dep"
+                    version = "0.1.0"
+                    edition = "2024"
+                    [features]
+                    default = { enables = [], doc = "Dependency documentation." }
+                "#,
+                )
+                .file("dep/src/lib.rs", "")
+                .build();
+
+            for no_deps in [false, true] {
+                let mut cmd = p.cargo("metadata --format-version 1");
+                if no_deps {
+                    cmd.arg("--no-deps");
+                }
+                let output = cmd
+                    .masquerade_as_nightly_cargo(&["feature-metadata"])
+                    .run_json();
+                let packages = output["packages"].as_array().unwrap();
+                assert_eq!(
+                    packages.len(),
+                    2 + usize::from(root_is_package) + usize::from(!no_deps)
+                );
+                for package in packages {
+                    let expected = match package["name"].as_str().unwrap() {
+                        "documented" => Some(json!({
+                            "default": { "enables": [], "doc": "Member documentation." }
+                        })),
+                        "dep" => Some(json!({
+                            "default": { "enables": [], "doc": "Dependency documentation." }
+                        })),
+                        "root" if root_opts_in => Some(json!({
+                            "default": { "enables": [] }
+                        })),
+                        "root" | "plain" => None,
+                        name => panic!("unexpected package {name}"),
+                    };
+                    assert_eq!(
+                        package.get("features_v2"),
+                        expected.as_ref(),
+                        "package {}, root_is_package={root_is_package}, root_opts_in={root_opts_in}, no_deps={no_deps}",
+                        package["name"]
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[cargo_test]
 fn cargo_metadata_simple() {
     let p = project()
         .file("src/foo.rs", "")
